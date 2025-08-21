@@ -18,15 +18,49 @@ class DataPreprocessor:
     def group_by_month(self, train: pd.DataFrame) -> pd.DataFrame:
         index_cols = ['date_block_num', 'shop_id', 'item_id']
         monthly_sales = train.groupby(index_cols).agg(
-        item_cnt_month_=('item_cnt_day', 'sum'),
-            purch_cnt_month=('item_cnt_day', 'count')
+        item_cnt_month_unclipped=('item_cnt_day', 'sum'),
+            purch_cnt_month_=('item_cnt_day', 'count'),
+            item_price = ('item_price', 'mean')
         ).reset_index()
+
         month_sales = monthly_sales
+        month_sales['item_cnt_month_'] = month_sales['item_cnt_month_unclipped'].clip(0,20)
 
         month_sales.fillna(0, inplace=True)
 
 
         return month_sales
+    
+    def add_lag_features(self, df:pd.DataFrame ,time_column: str, feature_column: str, group_level:list, lags: list):
+        df_with_lags = df.copy()
+        temp_frame = self.data_storage['train'][[time_column, feature_column, *group_level]].copy()
+        for lag in lags:
+            temp_frame[time_column] -= lag
+
+            temp_frame.rename(columns = {feature_column : f'{feature_column}_lag_{str(lag)}'}, inplace=True)
+
+            df_with_lags = pd.merge(df_with_lags, temp_frame, on = [time_column, *group_level], how='left')
+
+            
+
+            temp_frame.rename(columns={f'{feature_column}_lag_{str(lag)}': feature_column}, inplace=True)
+            temp_frame[time_column] += lag
+
+        df_with_lags.fillna(0, inplace=True)
+
+        return df_with_lags
+    
+
+    def add_revenue(self, df):
+        df['revenue'] = df['item_price'] * df['item_cnt_month_']
+        return df
+
+
+
+
+            
+
+
     
     def add_cat_features(self, train: pd.DataFrame) -> pd.DataFrame:
         item_categories = self.data_storage['item_categories']
@@ -49,26 +83,6 @@ class DataPreprocessor:
         
         return train
     
-
-    def add_lag_features(self, df: pd.DataFrame, col_to_agg: str, group_levels: list, n_lags: list, aggfunc: str = 'sum') -> pd.DataFrame:
-
-        pivot_df = pd.pivot_table(df, values=col_to_agg, index=group_levels, aggfunc=aggfunc).reset_index()
-        pivot_df.rename(columns={col_to_agg: f'{col_to_agg}_{aggfunc}'}, inplace=True)
-        
-        df = df.merge(pivot_df, on=group_levels, how='left')
-
-        for lag in n_lags:
-            lag_col_name = f'item_cnt_month_lag_{lag}'
-            lag_df = pivot_df.copy()
-            lag_df['date_block_num'] += lag
-            lag_df.rename(columns={f'{col_to_agg}_{aggfunc}': lag_col_name}, inplace=True)
-            
-            df = df.merge(lag_df, on=group_levels, how='left')
-            df[lag_col_name] = df[lag_col_name].fillna(0).astype('float32')
-
-        df.drop(columns=[f'{col_to_agg}_{aggfunc}'], inplace=True)
-        
-        return df
     
 
     def add_item_price_to_test(self, train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFrame:
