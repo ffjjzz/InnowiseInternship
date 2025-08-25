@@ -52,7 +52,10 @@ class DataPreprocessor:
     
 
     def add_revenue(self, df):
-        df['revenue'] = df['item_price'] * df['item_cnt_month_']
+        if 'item_price' in df and 'item_cnt_month_' in df:
+            df['revenue'] = df['item_price'] * df['item_cnt_month_']
+        else:
+            df['revenue'] = 0
         return df
 
 
