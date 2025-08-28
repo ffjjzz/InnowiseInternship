@@ -18,13 +18,12 @@ class DataPreprocessor:
     def group_by_month(self, train: pd.DataFrame) -> pd.DataFrame:
         index_cols = ['date_block_num', 'shop_id', 'item_id']
         monthly_sales = train.groupby(index_cols).agg(
-        item_cnt_month_unclipped=('item_cnt_day', 'sum'),
-            purch_cnt_month_=('item_cnt_day', 'count'),
+        item_cnt_month_=('item_cnt_day', 'sum'),
             item_price = ('item_price', 'mean')
         ).reset_index()
 
         month_sales = monthly_sales
-        month_sales['item_cnt_month_'] = month_sales['item_cnt_month_unclipped'].clip(0,20)
+        month_sales['item_cnt_month_'] = month_sales['item_cnt_month_'].clip(0,20)
 
         month_sales.fillna(0, inplace=True)
 
