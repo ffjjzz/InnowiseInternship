@@ -34,7 +34,7 @@ class TimeSeriesRollingValidator:
     
 
     def validate(self, models: list, splits: list, target_col: str = 'target'):
-        results = []
+        results = []    
         for model, split in zip(models, splits):
             train_set, val_set, test_set = split
 
@@ -52,3 +52,4 @@ class TimeSeriesRollingValidator:
                 'test_months': len(test_set)
             })
         return pd.DataFrame(results)
+    
