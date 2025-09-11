@@ -32,7 +32,7 @@ class DataPreprocessor:
     
     def add_lag_features(self, df:pd.DataFrame ,time_column: str, feature_column: str, group_level:list, lags: list):
         df_with_lags = df.copy()
-        temp_frame = self.data_storage['train'][[time_column, feature_column, *group_level]].copy()
+        temp_frame = df[[time_column, feature_column, *group_level]].copy()
         for lag in lags:
             temp_frame[time_column] -= lag
 
@@ -40,7 +40,6 @@ class DataPreprocessor:
 
             df_with_lags = pd.merge(df_with_lags, temp_frame, on = [time_column, *group_level], how='left')
 
-            
 
             temp_frame.rename(columns={f'{feature_column}_lag_{str(lag)}': feature_column}, inplace=True)
             temp_frame[time_column] += lag

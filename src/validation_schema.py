@@ -1,5 +1,9 @@
 import pandas as pd
-from sklearn.metrics import root_mean_squared_error
+from sklearn.dummy import DummyRegressor
+import matplotlib.pyplot as plt
+import numpy as np
+import tqdm as tqdm
+
 
 class TimeSeriesRollingValidator:
     def __init__(self, df: pd.DataFrame, time_col: str, train_window: int, test_window: int):
@@ -33,23 +37,73 @@ class TimeSeriesRollingValidator:
         return all_splits
     
 
-    def validate(self, models: list, splits: list, target_col: str = 'target'):
+    def validate(self, model_learning_function, metrics: dict, splits: list, categorical_reatures: list,  target_col: str = 'target', dummy_model=DummyRegressor):
         results = []    
-        for model, split in zip(models, splits):
+        for split in tqdm.tqdm(splits):
             train_set, val_set, test_set = split
+            model = model_learning_function(train_set, val_set, test_set, categorical_reatures)
 
-            X_test = test_set.drop(columns=[target_col])
-            y_test = test_set[target_col]
 
-            predictions = model.predict(X_test)
-            
-            rmse = root_mean_squared_error(y_test, predictions)
-            results.append({
+
+            statistics = {
                 'model': model.__class__.__name__,
-                'rmse': rmse,
                 'train_months': len(train_set),
                 'val_months': len(val_set),
-                'test_months': len(test_set)
-            })
+                'test_months': len(test_set), 
+
+            }
+
+            dummy = dummy_model()
+            dummy.fit(train_set.drop(columns= [target_col]), train_set[target_col])
+
+            dummy_test_out = dummy.predict(test_set.drop(columns=[target_col]))
+            dummy_val_out = dummy.predict(val_set.drop(columns=[target_col]))
+            dummy_train_out = dummy.predict(train_set.drop(columns=[target_col]))
+
+            statistics.update({f'dummy_{name}_test' : metrics[name](dummy_test_out, test_set[target_col]) for name in metrics})
+            statistics.update({f'dummy_{name}_val' : metrics[name](dummy_val_out, val_set[target_col]) for name in metrics})
+            statistics.update({f'dummy_{name}_train' : metrics[name](dummy_train_out, train_set[target_col]) for name in metrics})
+
+            model_test_out = model.predict(test_set.drop(columns=[target_col]))
+            model_val_out = model.predict(val_set.drop(columns=[target_col]))
+            model_train_out = model.predict(train_set.drop(columns=[target_col]))
+
+            statistics.update({f'model_{name}_test' : metrics[name](model_test_out, test_set[target_col]) for name in metrics})
+            statistics.update({f'model_{name}_val' : metrics[name](model_val_out, val_set[target_col]) for name in metrics})
+            statistics.update({f'model_{name}_train' : metrics[name](model_train_out, train_set[target_col]) for name in metrics})
+
+
+            results.append(statistics)
+
         return pd.DataFrame(results)
     
+
+
+    def visualize_validation_results_with_linear_trend(self, validation_results, metrics: str = 'RMSE'):
+        plt.figure(figsize=(12, 7))
+        plt.title(f'Metric {metrics} dynamics during validation with linear trend')
+        plt.xlabel('Validation Iteration')
+        plt.ylabel(f'Metric {metrics} value')
+
+        train_data = np.array(validation_results[f"model_{metrics}_train"])
+        val_data = np.array(validation_results[f"model_{metrics}_val"])
+        test_data = np.array(validation_results[f"model_{metrics}_test"])
+        
+        iterations = np.arange(len(train_data))
+
+        def plot_linear_trend(data, label, color):
+            import numpy as np
+            coefficients = np.polyfit(iterations, data, 1)
+            trend_line = np.poly1d(coefficients)(iterations)
+            
+
+            plt.plot(iterations, data, label=label, color=color, alpha=0.3)
+            plt.plot(iterations, trend_line, linestyle='--', color=color, linewidth=2, label=f'Linear Trend ({label})')
+
+        plot_linear_trend(train_data, 'Training Data', 'C0')
+        plot_linear_trend(val_data, 'Validation Data', 'C1')
+        plot_linear_trend(test_data, 'Testing Data', 'C2')
+        
+        plt.legend()
+        plt.grid(True)
+        plt.show()
